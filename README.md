@@ -1,36 +1,99 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+## File Upload version: 1
 
-## Getting Started
+```python
 
-First, run the development server:
+import { NextRequest, NextResponse } from "next/server";
+import fs from "fs/promises";
+import path from "path";
+import { dbConnect } from "@/dbConfig/dbConfig";
+import { File } from "@/models/FileUpload";
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+export const POST = async (req: NextRequest) => {
+  try {
+    // Connect to the database
+    await dbConnect();
+
+    // Get the uploaded file from the form data
+    const formData = await req.formData();
+    const image = formData.get("image") as File | null;
+
+    // Check if a file was uploaded
+    if (!image) {
+      return NextResponse.json({ msg: "Error: No file uploaded" });
+    }
+
+    // Read the uploaded file as a buffer
+    const buffer = await fs.readFile(image.path);
+
+    // Define the file name
+    const fileName = image.name;
+
+    // Define the path where you want to save the file
+    const filePath = path.join(process.cwd(), "public", fileName);
+
+    // Write the buffer to the file
+    await fs.writeFile(filePath, buffer);
+
+    // Save the file path to the database
+    const fileData = new File({ file: filePath });
+    await fileData.save();
+
+    return NextResponse.json({
+      msg: "File processed and saved successfully",
+      fileName,
+    });
+  } catch (err) {
+    console.error("Error processing file:", err);
+    return NextResponse.json(new Error("File processing failed"));
+  }
+};
+
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+# file upload v: 2
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```python
+import { NextRequest, NextResponse } from "next/server";
+import fs from "fs/promises";
+import path from "path";
+import { dbConnect } from "@/dbConfig/dbConfig";
+import { File } from "@/models/FileUpload";
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+export const POST = async (req: NextRequest) => {
+  try {
+    // Connect to the database
+    await dbConnect();
 
-## Learn More
+    const formData = await req.formData();
+    const image = formData.get("image") as File | null;
 
-To learn more about Next.js, take a look at the following resources:
+    if (!image) {
+      return NextResponse.json({ msg: "Error: No file uploaded" });
+    }
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+    const byteData = await image.arrayBuffer();
+    const buffer = Buffer.from(byteData);
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+    // Ensure the file name doesn't contain any special characters or directory separators
+    const safeFileName = image.name.replace(/[^\w.-]/g, "_");
 
-## Deploy on Vercel
+    // Define the path where you want to save the file
+    const filePath = path.join(process.cwd(), "public", safeFileName);
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+    // Write the buffer to the file
+    await fs.writeFile(filePath, buffer);
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+    // Save the file path to the database
+    const fileData = new File({ file: filePath });
+    await fileData.save();
+
+    return NextResponse.json({
+      msg: "File processed and saved successfully",
+      fileName: safeFileName,
+    });
+  } catch (err) {
+    console.error("Error processing file:", err);
+    return NextResponse.json(new Error("File processing failed"));
+  }
+};
+```

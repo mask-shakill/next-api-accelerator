@@ -1,0 +1,43 @@
+import { NextRequest, NextResponse } from "next/server";
+import fs from "fs/promises";
+import path from "path";
+import { dbConnect } from "@/dbConfig/dbConfig";
+import { File } from "@/models/FileUpload";
+
+export const POST = async (req: NextRequest) => {
+  try {
+    // Connect to the database
+    await dbConnect();
+
+    const formData = await req.formData();
+    const image = formData.get("image") as File | null;
+
+    if (!image) {
+      return NextResponse.json({ msg: "Error: No file uploaded" });
+    }
+
+    const byteData = await image.arrayBuffer();
+    const buffer = Buffer.from(byteData);
+
+    // Ensure the file name doesn't contain any special characters or directory separators
+    const safeFileName = image.name.replace(/[^\w.-]/g, "_");
+
+    // Define the path where you want to save the file
+    const filePath = path.join(process.cwd(), "public", safeFileName);
+
+    // Write the buffer to the file
+    await fs.writeFile(filePath, buffer);
+
+    // Save the file path to the database
+    const fileData = new File({ file: filePath });
+    await fileData.save();
+
+    return NextResponse.json({
+      msg: "File processed and saved successfully",
+      fileName: safeFileName,
+    });
+  } catch (err) {
+    console.error("Error processing file:", err);
+    return NextResponse.json(new Error("File processing failed"));
+  }
+};
